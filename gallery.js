@@ -1,70 +1,93 @@
 /*
   gallery.js
-  Renders the full "My Works" gallery on mywork.html — every project as
-  an image-only tile (no title/description/link). Clicking a tile opens
-  the full image in the shared lightbox (see lightbox.js).
+  Renders the full "My Works" gallery on mywork.html.
+  Images are loaded from images.json.
 
-  Data source priority:
-  1. Browser localStorage (key: "portfolioProjects") — set by upload.html
-  2. projects.json file sitting next to index.html — used as a fallback.
+  images.json format:
+  [
+      "work (1).jpg",
+      "work (1).png",
+      "work (2).jpg"
+  ]
+
+  Clicking a tile opens the full image in the shared lightbox.
 */
+
 (function () {
-    const STORAGE_KEY = "portfolioProjects";
+    const JSON_FILE = "images.json";
+    const IMAGE_FOLDER = "images/";
+
     const container = document.getElementById("gallery-container");
     const emptyMsg = document.getElementById("gallery-empty");
 
-    function renderGallery(projects) {
+    // Escape HTML attributes safely
+    function escapeAttr(str) {
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+    // Render all images
+    function renderGallery(images) {
         if (!container) return;
 
-        if (!Array.isArray(projects) || projects.length === 0) {
-            if (emptyMsg) emptyMsg.style.display = "block";
+        if (!Array.isArray(images) || images.length === 0) {
+            if (emptyMsg) {
+                emptyMsg.style.display = "block";
+            }
             return;
         }
 
-        if (emptyMsg) emptyMsg.style.display = "none";
+        if (emptyMsg) {
+            emptyMsg.style.display = "none";
+        }
 
-        const html = projects.map((project) => {
-            const image = project.image ? project.image : "logo.png";
-            const safeImage = escapeAttr(image);
+        const html = images.map((filename) => {
+            const imagePath = IMAGE_FOLDER + filename;
+            const safeImage = escapeAttr(imagePath);
+
             return `
                 <div class="gallery-item lightbox-trigger" data-full="${safeImage}">
-                    <img src="${safeImage}" alt="Project">
+                    <img 
+                        src="${safeImage}" 
+                        alt="Project"
+                        loading="lazy"
+                    >
                 </div>
             `;
         }).join("");
 
-        container.insertAdjacentHTML("beforeend", html);
+        // Replace existing content instead of duplicating it
+        container.innerHTML = html;
     }
 
-    function escapeAttr(str) {
-        return String(str).replace(/"/g, "&quot;");
-    }
+    // Load images from images.json
+    function loadImages() {
+        fetch(JSON_FILE)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(
+                        `Failed to load ${JSON_FILE}: ${response.status}`
+                    );
+                }
 
-    function loadFromLocalStorage() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : null;
-        } catch (e) {
-            return null;
-        }
-    }
+                return response.json();
+            })
+            .then((images) => {
+                renderGallery(images);
+            })
+            .catch((error) => {
+                console.error("Error loading gallery:", error);
 
-    function loadFromJsonFile() {
-        fetch("projects.json")
-            .then((res) => (res.ok ? res.json() : []))
-            .then((data) => renderGallery(data))
-            .catch(() => {
-                // No local server / no projects.json available — leave the
-                // "coming soon" placeholder visible.
+                if (emptyMsg) {
+                    emptyMsg.style.display = "block";
+                }
             });
     }
 
-    const localProjects = loadFromLocalStorage();
-    if (localProjects && localProjects.length > 0) {
-        renderGallery(localProjects);
-    } else {
-        loadFromJsonFile();
-    }
+    // Start loading
+    loadImages();
+
 })();
